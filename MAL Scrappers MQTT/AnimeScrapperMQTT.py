@@ -25,7 +25,7 @@ try:
     with open("config/mqtt.txt", "x"):
         print("mqtt.txt created")
     with open("config/mqtt.txt", "w") as f:
-        f.write("mqtt.eclipseprojects.io|/mqtt/broker/topic")
+        f.write("mqtt.eclipseprojects.io|/ssserver/animescrapper/status")
 except:pass
 
 # read mqtt url file
@@ -121,7 +121,13 @@ if not finished:
                 # if animeData has valid data, insert it into the database and update the status file
                 if animeData:
                     logging.debug("Valid data")
-                    animeScrapper.dataInsert(animeData)
+                    insertStatus = animeScrapper.dataInsert(animeData)
+                    if insertStatus:
+                        logging.debug("Data inserted succesfully into database")
+                        mqttUpdate(f"Id: {x} data inserted succesfully into database")
+                    else:
+                        logging.error("Error while inserting data into database!")
+                        mqttUpdate(f"Error while inserting Id: {x} data into database!")
                     break
                 elif animeData is False:
                     logging.debug("Invalid data")
@@ -133,6 +139,7 @@ if not finished:
             mqttUpdate("Last Id: "+str(x))
     except Exception as e:
         error = "An error occurred while running the program!\nError: "+str(e)+"\nTerminating program..."
+        logging.error(error)
         print(error)
         mqttUpdate(error)
         exit()
