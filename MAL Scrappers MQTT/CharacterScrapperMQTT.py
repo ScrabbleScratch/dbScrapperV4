@@ -24,7 +24,7 @@ try:
     with open("config/mqtt.txt", "x"):
         print("mqtt.txt created")
     with open("config/mqtt.txt", "w") as f:
-        f.write("mqtt.eclipseprojects.io|/ssserver/characterscrapper/status")
+        f.write("mqtt.eclipseprojects.io|/mqtt/broker/topic")
 except:pass
 
 # read mqtt url file
