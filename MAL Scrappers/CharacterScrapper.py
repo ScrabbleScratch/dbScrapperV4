@@ -73,32 +73,38 @@ else:
 
 # create a dbScrapper object
 logging.debug("Creating dbScrapper object")
-animeScrapper = dbScrapper(dbConfigFile, args.cycle)
+characterScrapper = dbScrapper(dbConfigFile, args.cycle)
 
 # if finished is false then continue
 if not finished:
-    logging.debug(f"Scrapping anime data from Id: {lastId} to Id: {maxId}")
-    print(f"Scrapping anime data from Id: {lastId} to Id: {maxId}")
+    logging.debug(f"Scrapping character data from Id: {lastId} to Id: {maxId}")
+    print(f"Scrapping character data from Id: {lastId} to Id: {maxId}")
     try:
         # scrap data from lastId to maxId
         for x in range(lastId, maxId):
-            # bucle until animeData gets valid data to evaluate
+            # bucle until characterData gets valid data to evaluate
             while True:
                 logging.debug(f"Getting Id: {x} data")
-                animeData = animeScrapper.dataGet(x)
-                # if animeData has valid data, insert it into the database and update the status file
-                if animeData:
+                characterData = characterScrapper.dataGet(x)
+                # if characterData has valid data, insert it into the database and update the status file
+                if characterData:
                     logging.debug("Valid data")
-                    animeScrapper.dataInsert(animeData)
+                    insertStatus = characterScrapper.dataInsert(characterData)
+                    if insertStatus:
+                        logging.debug("Data inserted succesfully into database")
+                    else:
+                        logging.error("Error while inserting data into database!")
                     break
-                elif animeData is False:
+                elif characterData is False:
                     logging.debug("Invalid data")
                     break
+            # update status
             with open(statusFile, "w") as status:
                 logging.debug("Updating status file")
                 status.write(json.dumps({"finished":False, "lastId":x, "maxId":maxId}, indent=4))
     except Exception as e:
         error = "An error occurred while running the program!\nError: "+str(e)+"\nTerminating program..."
+        logging.error(error)
         print(error)
         exit()
     # when the maxId has been reached, update the finished parameter to True within the status file
@@ -108,7 +114,7 @@ if not finished:
 
 # close the database connection when everything has finished
 logging.debug("Closing database connection")
-animeScrapper.closeConnection()
+characterScrapper.closeConnection()
 
 # print finished message
 logging.info("Scrapping is finished!")
