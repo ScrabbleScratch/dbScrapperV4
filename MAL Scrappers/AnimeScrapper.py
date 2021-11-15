@@ -98,7 +98,7 @@ if not finished:
                 # if animeData has valid data, insert it into the database and update the status file
                 if animeData:
                     logging.debug("Valid data")
-                    #animeScrapper.dataInsert(animeData)
+                    animeScrapper.dataInsert(animeData)
                     break
                 elif animeData is False:
                     logging.debug("Invalid data")
