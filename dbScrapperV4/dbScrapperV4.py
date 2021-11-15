@@ -4,7 +4,7 @@
 # Title: dbScrapperV4
 # Author: ScrabbleScratch
 # Url: https://github.com/ScrabbleScratch/dbScrapperV4
-# Created: 09/november/2021
+# Created: 15/november/2021
 # version: 4
 #License: GNU General Public License v3.0
 # ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ defDataBaseConfig = {"api":"","database":{"host":"","port":3306,"user":"","passw
 # create the dbScrapper class
 class dbScrapper():
     # initialize class instance
-    def __init__(self, config, delay=False):
+    def __init__(self, config, delay=False, encode=False):
         # load configuration parameters from json file
         try:
             with open(config, 'r') as file:
@@ -77,6 +77,8 @@ class dbScrapper():
             self.delay = delay
         else:
             self.delay = conf["delay"]
+        # select if internally encode data
+        self.encodeData = encode
         # (database) : (api) dictionary
         self.dbCols = {}
         for k in self.apiKeys:
@@ -114,7 +116,7 @@ class dbScrapper():
         if data.status_code in [200, 201]:
             print(f"Entry with Id:{fetch} found!")
             # encode text data in utf-8 and save in data variable
-            data = self.encodeText(data.json())
+            data = self.encodeText(data.json()) if self.encodeData else data.json()
             if type(data) is dict:
                 for x in data:
                     if not type(data[x]) in NUMERIC_TYPES:
@@ -152,8 +154,18 @@ class dbScrapper():
         # database query column dictionary
         queryDict = {}
         for k in range(len(self.tableCols)):
-            queryDict[self.tableCols[k]] = query[0][k]
-        # entire content of the query as list of dcitionaries pero row in database
+            if not type(query[0][k]) in NUMERIC_TYPES:
+                # print(f"\t├─To be changed: {x}")
+                if type(query[0][k]) is NoneType:
+                    queryDict[self.tableCols[k]] = "null"
+                elif type(query[0][k]) is bool:
+                    queryDict[self.tableCols[k]] = int(query[0][k])
+                else:
+                    queryDict[self.tableCols[k]] = str(query[0][k]).replace("\\","\\\\").replace("\"","\\\"")
+            else:
+                if type(query[0][k]) is int: queryDict[self.tableCols[k]] = query[0][k]
+                else: queryDict[self.tableCols[k]] = float(query[0][k])
+        # entire content of the query as list of dictionaries per row in database
         queryContent = []
         for r in query:
             row = {}
@@ -167,15 +179,16 @@ class dbScrapper():
         print(f"\t├─Same '{self.uniqueId}' found in database!")
         dataKeys = list(data.keys())
         for k in self.tableCols:
-            queryVal = queryDict[k].replace("\\","\\\\").replace("\"","\\\"") if type(queryDict[k]) is str else queryDict[k]
+            queryVal = queryDict[k]
             if k in dataKeys:
-                if str(queryVal) == str(data[self.dbCols[k]]):
+                if queryVal == data[self.dbCols[k]]:
                     colCheck = True
                     result = True
                 else:
                     colCheck = False
                     different = True
                 print(f"\t│\t├─Same {k}: {colCheck}")
+                #print(f"{queryVal} || {data[self.dbCols[k]]}")
         print(f"\t└─Data exists in database:\n\t\t├─result:{result}\n\t\t└─different:{different}")
         return [result,different,queryContent]
     
@@ -190,12 +203,11 @@ class dbScrapper():
             for c in self.tableCols:
                 k = self.dbCols[c]
                 if k in dataKeys:
-                    dbEntry += str(f"\"{data[k]}\"") if type(data[k]) is str else str(data[k])
+                    dbEntry += str(f"\"{data[k]}\"") if type(data[k]) is str and not data[k] == "null" else str(data[k])
                 else:
                     dbEntry += "null"
                 if c != self.apiKeys[-1]: dbEntry += ","
             dbEntry += ")"
-            with open("query.txt","w") as f: f.write(dbEntry)
             #print(dbEntry)
             self.dbCursor.execute(dbEntry)
             print("\t├─Checking data added succesfully... ")
@@ -205,10 +217,7 @@ class dbScrapper():
             for c in self.tableCols:
                 k = self.dbCols[c]
                 if k in dataKeys:
-                    if str(data[k]).isnumeric() or data[k] == "null":
-                        dbUpdate += f"`{c}`={data[k]}"
-                    else:
-                        dbUpdate += f"`{c}`=\"{data[k]}\""
+                    dbUpdate += f"`{c}`=\"{data[k]}\"" if type(data[k]) is str and not data[k] == "null" else f"`{c}`={data[k]}"
                     if c != self.apiKeys[-1]: dbUpdate += ", "
             dbUpdate += f" WHERE {self.uniqueId}={data[self.dbCols[self.uniqueId]]}"
             #print(dbUpdate)
@@ -216,7 +225,7 @@ class dbScrapper():
             print("\t├─Checking data was updated succesfully... ")
         else:
             print("Entry was found in the database with no changes!")
-            return False
+            return True
         self.db.commit()
         entry = self.dataExists(data)
         if not entry:
@@ -230,7 +239,7 @@ class dbScrapper():
                 print("Entry was found multiple times in the database! Please check database.")
         elif entry[0] and entry[1]:
             print("Entry was found with different values! Check the system.")
-        return None
+        return False
     
     # close the connection with the database
     def closeConnection(self):
