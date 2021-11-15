@@ -98,7 +98,11 @@ if not finished:
                 # if animeData has valid data, insert it into the database and update the status file
                 if animeData:
                     logging.debug("Valid data")
-                    animeScrapper.dataInsert(animeData)
+                    insertStatus = animeScrapper.dataInsert(animeData)
+                    if insertStatus:
+                        logging.debug("Data inserted succesfully into database")
+                    else:
+                        logging.error("Error while inserting data into database!")
                     break
                 elif animeData is False:
                     logging.debug("Invalid data")
@@ -107,8 +111,10 @@ if not finished:
             with open(statusFile, "w") as status:
                 logging.debug("Updating status file")
                 status.write(json.dumps({"finished":False, "lastId":x, "maxId":maxId}, indent=4))
+    #try: pass
     except Exception as e:
         error = "An error occurred while running the program!\nError: "+str(e)+"\nTerminating program..."
+        logging.error(error)
         print(error)
         exit()
     # when the maxId has been reached, update the finished parameter to True within the status file
