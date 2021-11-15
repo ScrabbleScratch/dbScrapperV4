@@ -8,3 +8,6 @@ Now offering two versions:
     
 -> `dbScrapperV4_LOGGED`
     _Now offering an option able to log its operation. Inlcudes the same capabilities of the normal version plus the logging feature._
+
+
+*_The project was originally made thinking of it be used in a docker container as a standalone program, but it works perfectly without being containerized._
