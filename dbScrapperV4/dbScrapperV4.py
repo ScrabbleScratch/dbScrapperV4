@@ -18,6 +18,7 @@ the database depending on the comparisson result between the data. """
 # ---------------------------------------------------------------------------
 #!/usr/bin/env python3
 import json
+from types import NoneType
 from mysql.connector.utils import NUMERIC_TYPES
 import requests as rq
 import mysql.connector
@@ -40,13 +41,24 @@ class dbScrapper():
                 file.write(json.dumps(defDataBaseConfig, indent=4))
             exit()
         # initialize database connection and create a MySQLConnection object
-        self.db = mysql.connector.connect(
-            host = conf["database"]["host"],
-            port = conf["database"]["port"],
-            user = conf["database"]["user"],
-            password = conf["database"]["password"],
-            database = conf["database"]["database"]
-        )
+        counter = 0
+        while counter < 3:
+            try:
+                self.db = mysql.connector.connect(
+                    host = conf["database"]["host"],
+                    port = conf["database"]["port"],
+                    user = conf["database"]["user"],
+                    password = conf["database"]["password"],
+                    database = conf["database"]["database"]
+                )
+                break
+            except:
+                print("Error while connecting to database! Trying again...")
+                counter += 1
+                sleep(5)
+        else:
+            print("Couldn't connect to database! Terminating program...")
+            raise Exception("Couldn't connect to database!")
         # self.db cursor
         self.dbCursor = self.db.cursor()
         # api url
@@ -80,6 +92,20 @@ class dbScrapper():
         print("New dbScrapper object created!")
         return
     
+    # encode data into utf-8
+    # checks strings and elements of a list and dictionary
+    def encodeText(self, text):
+        if type(text) is str:
+            try:
+                text.encode("ascii")
+            except:
+                text = text.encode("utf-8")
+        elif type(text) in [list,dict]:
+            indexes = list(text.keys()) if type(text) is dict else list(range(len(text)))
+            for i in indexes:
+                text[i] = self.encodeText(text[i])
+        return text
+
     # fetch data info from self.api
     # returns 'data' (json formatted data) if it found a result, and False if it did not found anything
     def dataGet(self, fetch):
@@ -87,14 +113,29 @@ class dbScrapper():
         sleep(self.delay)
         if data.status_code in [200, 201]:
             print(f"Entry with Id:{fetch} found!")
-            data = data.json()
-            return data
+            # encode text data in utf-8 and save in data variable
+            data = self.encodeText(data.json())
+            if type(data) is dict:
+                for x in data:
+                    if not type(data[x]) in NUMERIC_TYPES:
+                        # print(f"\t├─To be changed: {x}")
+                        if type(data[x]) is NoneType:
+                            data[x] = "null"
+                        elif type(data[x]) is bool:
+                            data[x] = int(data[x])
+                        else:
+                            data[x] = str(data[x]).replace("\\","\\\\").replace("\"","\\\"")
+                    else:
+                        if not type(data[x]) is int: data[x] = float(data[x])
+                return data
+            else:
+                print("Data is not a dictionary!")
         elif data.status_code == 404:
             print(f"Entry with Id:{fetch} not found!")
         elif data.status_code in [400, 401, 403, 405, 409]:
-            print(f"Invalid request!")
+            print("Invalid request!")
         elif data.status_code in [500, 503]:
-            print(f"Service not available right now!")
+            print("Service not available right now!")
             return None
         else:
             print("Unknown status code: " + data.status_code)
@@ -126,11 +167,9 @@ class dbScrapper():
         print(f"\t├─Same '{self.uniqueId}' found in database!")
         dataKeys = list(data.keys())
         for k in self.tableCols:
-            queryVal = queryDict[k]
+            queryVal = queryDict[k].replace("\\","\\\\").replace("\"","\\\"") if type(queryDict[k]) is str else queryDict[k]
             if k in dataKeys:
-                if data[self.dbCols[k]] == "null": data[self.dbCols[k]] = None
-                if (type(queryVal) not in NUMERIC_TYPES and str(queryVal) == str(data[self.dbCols[k]]).replace("\\","")) or \
-                    (type(queryVal) in NUMERIC_TYPES and float(queryVal) == float(data[self.dbCols[k]])):
+                if str(queryVal) == str(data[self.dbCols[k]]):
                     colCheck = True
                     result = True
                 else:
@@ -143,18 +182,7 @@ class dbScrapper():
     # insert or update an anime entry in the database and finally check if it is found int he database
     # prints id, mal_id and title if the entry was added and found in the database
     def dataInsert(self, data):
-        if not type(data) is dict:
-            print("\t└─Invalid data to insert! Returning...")
-            return False
         dataKeys = list(data.keys())
-        for c in self.tableCols:
-            k = self.dbCols[c]
-            if k in dataKeys:
-                if data[k] == None: data[k] = "null"
-                if type(data[k]) is bool: data[k] = int(data[k])
-                if not str(data[k]).isnumeric():
-                    print(f"\t├─To be changed: {k}")
-                    data[k] = str(data[k]).replace('"', '\\"')
         check = self.dataExists(data)
         if not check:
             print("Entry not found in the database! Creating it...")
@@ -162,14 +190,12 @@ class dbScrapper():
             for c in self.tableCols:
                 k = self.dbCols[c]
                 if k in dataKeys:
-                    if not str(data[k]).isalpha() and str(data[k]).isnumeric() or data[k] == "null":
-                        dbEntry += f"{data[k]}"
-                    else:
-                        dbEntry += f"\"{data[k]}\""
+                    dbEntry += str(f"\"{data[k]}\"") if type(data[k]) is str else str(data[k])
                 else:
                     dbEntry += "null"
                 if c != self.apiKeys[-1]: dbEntry += ","
             dbEntry += ")"
+            with open("query.txt","w") as f: f.write(dbEntry)
             #print(dbEntry)
             self.dbCursor.execute(dbEntry)
             print("\t├─Checking data added succesfully... ")
